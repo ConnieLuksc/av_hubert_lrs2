@@ -1,0 +1,5 @@
+- dataset.gen_subset=test
+- common_eval.path=/files1/connie/av_hubert_lrs2_whole/finetune_vary_noise_2/checkpoints/checkpoint_best.pt
+- common_eval.results_path=/files1/connie/av_hubert_lrs2_whole/finetune_output/decode/s2s/test
+- override.modalities=[audio,video]
+- common.user_dir=/files1/connie/av_hubert_lrs2/av_hubert/avhubert

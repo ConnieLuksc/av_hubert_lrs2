@@ -1,0 +1,215 @@
+cd /files1/connie/av_hubert_lrs2/av_hubert
+export PYTHONPATH=$PYTHONPATH:/files1/connie/av_hubert_lrs2/av_hubert/fairseq
+
+
+fairseq-hydra-train \
+  --config-dir avhubert/conf/finetune \
+  --config-name base_vox_30h.yaml \
+  task.data=/files1/connie/av_hubert_lrs2_preprocess/30h_data \
+  task.label_dir=/files1/connie/av_hubert_lrs2_preprocess/30h_data \
+  task.tokenizer_bpe_model=/files1/connie/av_hubert_lrs2_preprocess/spm500/spm_unigram500.model \
+  model.w2v_path=/files1/connie/avhubert_model/base_vox_iter5.pt \
+  hydra.run.dir=/files1/connie/av_hubert_lrs2_preprocess/finetune_output \
+  common.user_dir=/files1/connie/av_hubert_lrs2/av_hubert/avhubert \
+  distributed_training.distributed_world_size=1 \
+  distributed_training.distributed_rank=0 \
+  distributed_training.distributed_init_method=tcp://localhost:10001 \
+  distributed_training.nprocs_per_node=1 
+
+Increase Regularization
+CUDA_VISIBLE_DEVICES=0 fairseq-hydra-train \
+    --config-dir avhubert/conf/finetune \
+    --config-name base_vox_30h.yaml \
+    task.data=/files1/connie/av_hubert_lrs2_preprocess/30h_data \
+    task.label_dir=/files1/connie/av_hubert_lrs2_preprocess/30h_data \
+    task.tokenizer_bpe_model=/files1/connie/av_hubert_lrs2_preprocess/spm500/spm_unigram500.model \
+    model.w2v_path=/files1/connie/avhubert_model/base_vox_iter5.pt \
+    model.dropout=0.3 \
+    model.attention_dropout=0.1 \
+    model.decoder_dropout=0.3 \
+    model.decoder_attention_dropout=0.1 \
+    model.feature_grad_mult=0.1 \
+    hydra.run.dir=/files1/connie/av_hubert_lrs2_preprocess/finetune_regularization \
+    common.user_dir=/files1/connie/av_hubert_lrs2/av_hubert/avhubert \
+    distributed_training.distributed_world_size=1
+
+Both audio and video:
+CUDA_VISIBLE_DEVICES=1 fairseq-hydra-train \
+    --config-dir avhubert/conf/finetune \
+    --config-name large_lrs3_433h.yaml \
+    task.data=/files1/connie/av_hubert_lrs2_preprocess/433h_data \
+    task.label_dir=/files1/connie/av_hubert_lrs2_preprocess/433h_data \
+    task.tokenizer_bpe_model=/files1/connie/av_hubert_lrs2_preprocess/spm500/spm_unigram500.model \
+    model.w2v_path=/files1/connie/avhubert_model/large_lrs3_iter5.pt \
+    task.modalities="['audio','video']" \
+    task.pad_audio=true \
+    task.max_sample_size=500 \
+    task.stack_order_audio=4 \
+    model.dropout=0.3 \
+    model.attention_dropout=0.1 \
+    model.decoder_dropout=0.3 \
+    model.decoder_attention_dropout=0.1 \
+    model.feature_grad_mult=0.1 \
+    hydra.run.dir=/files1/connie/av_hubert_lrs2_preprocess/finetune_large \
+    common.user_dir=/files1/connie/av_hubert_lrs2/av_hubert/avhubert \
+    distributed_training.distributed_world_size=1
+
+whole lrs2:
+CUDA_VISIBLE_DEVICES=0 fairseq-hydra-train \
+    --config-dir avhubert/conf/finetune \
+    --config-name large_lrs3_433h.yaml \
+    task.data=/files1/connie/av_hubert_lrs2_whole/433h_data \
+    task.label_dir=/files1/connie/av_hubert_lrs2_whole/433h_data \
+    task.tokenizer_bpe_model=/files1/connie/av_hubert_lrs2_whole/spm1000/spm_unigram1000.model \
+    model.w2v_path=/files1/connie/avhubert_model/large_lrs3_iter5.pt \
+    task.modalities="['audio','video']" \
+    task.pad_audio=true \
+    task.max_sample_size=500 \
+    task.stack_order_audio=4 \
+    model.dropout=0.3 \
+    model.attention_dropout=0.1 \
+    model.decoder_dropout=0.3 \
+    model.decoder_attention_dropout=0.1 \
+    model.feature_grad_mult=0.1 \
+    hydra.run.dir=/files1/connie/av_hubert_lrs2_whole/finetune_test_1\
+    common.user_dir=/files1/connie/av_hubert_lrs2/av_hubert/avhubert \
+    distributed_training.distributed_world_size=1\
+    optimization.lr=[0.00001] \
+    optimization.max_update=200000
+
+conformer
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+CUDA_VISIBLE_DEVICES=2,3 fairseq-hydra-train \
+    --config-dir avhubert/conf/finetune \
+    --config-name large_lrs3_433h.yaml \
+    task.data=/files1/connie/av_hubert_lrs2_whole/433h_data \
+    task.label_dir=/files1/connie/av_hubert_lrs2_whole/433h_data \
+    task.tokenizer_bpe_model=/files1/connie/av_hubert_lrs2_whole/spm1000/spm_unigram1000.model \
+    model.w2v_path=/files1/connie/avhubert_model/large_lrs3_iter5.pt \
+    task.modalities="['audio','video']" \
+    task.pad_audio=true \
+    task.max_sample_size=80 \
+    task.stack_order_audio=4 \
+    model.dropout=0.3 \
+    model.attention_dropout=0.1 \
+    model.decoder_dropout=0.3 \
+    model.decoder_attention_dropout=0.1 \
+    model.feature_grad_mult=0.1 \
+    hydra.run.dir=/files1/connie/av_hubert_lrs2_whole/conformer/conformer_4\
+    common.user_dir=/files1/connie/av_hubert_lrs2/av_hubert/avhubert \
+    distributed_training.distributed_world_size=2 \
+    distributed_training.nprocs_per_node=2 \
+    distributed_training.distributed_init_method=tcp://localhost:10003 \
+    optimization.lr=[0.00001] \
+    optimization.max_update=200000 \
+    optimization.update_freq=[10]
+
+
+CUDA_VISIBLE_DEVICES=0 fairseq-hydra-train \
+    --config-dir avhubert/conf/finetune \
+    --config-name large_lrs3_433h.yaml \
+    task.data=/files1/connie/av_hubert_lrs2_whole/433h_data \
+    task.label_dir=/files1/connie/av_hubert_lrs2_whole/433h_data \
+    task.tokenizer_bpe_model=/files1/connie/av_hubert_lrs2_whole/spm1000/spm_unigram1000.model \
+    model.w2v_path=/files1/connie/avhubert_model/large_lrs3_iter5.pt \
+    task.modalities="['audio','video']" \
+    task.pad_audio=true \
+    task.max_sample_size=500 \
+    task.stack_order_audio=4 \
+    model.dropout=0.3 \
+    model.attention_dropout=0.1 \
+    model.decoder_dropout=0.3 \
+    model.decoder_attention_dropout=0.1 \
+    model.feature_grad_mult=0.1 \
+    hydra.run.dir=/files1/connie/av_hubert_lrs2_whole/conformer/conformer_5\
+    common.user_dir=/files1/connie/av_hubert_lrs2/av_hubert/avhubert \
+    distributed_training.distributed_world_size=1\
+    optimization.lr=[0.00001] \
+    optimization.max_update=200000
+
+CUDA_VISIBLE_DEVICES=1 fairseq-hydra-train \
+    --config-dir avhubert/conf/finetune \
+    --config-name large_lrs3_433h.yaml \
+    task.data=/files1/connie/av_hubert_lrs2_whole/433h_data \
+    task.label_dir=/files1/connie/av_hubert_lrs2_whole/433h_data \
+    task.tokenizer_bpe_model=/files1/connie/av_hubert_lrs2_whole/spm1000/spm_unigram1000.model \
+    model.w2v_path=/files1/connie/avhubert_model/large_lrs3_iter5.pt \
+    task.modalities="['audio','video']" \
+    task.pad_audio=true \
+    task.max_sample_size=100 \
+    task.stack_order_audio=4 \
+    model.dropout=0.1 \
+    model.attention_dropout=0.1 \
+    model.decoder_dropout=0.1 \
+    model.decoder_attention_dropout=0.1 \
+    model.feature_grad_mult=0.1 \
+    hydra.run.dir=/files1/connie/av_hubert_lrs2_whole/conformer/conformer_7\
+    common.user_dir=/files1/connie/av_hubert_lrs2/av_hubert/avhubert \
+    distributed_training.distributed_world_size=1 \
+    distributed_training.distributed_init_method=tcp://localhost:10005 \
+    optimization.lr=[0.0001] \
+    optimization.update_freq=[10] \
+    optimization.max_update=200000
+
+export NCCL_DEBUG=INFO
+CUDA_VISIBLE_DEVICES=2,3 fairseq-hydra-train \
+    --config-dir avhubert/conf/finetune \
+    --config-name large_lrs3_433h.yaml \
+    checkpoint.restore_file=/files1/connie/av_hubert_lrs2_whole/conformer/conformer_1_1/checkpoints/checkpoint_last.pt \
+    checkpoint.reset_optimizer=false \
+    checkpoint.reset_lr_scheduler=false \
+    checkpoint.reset_dataloader=false \
+    checkpoint.reset_meters=false \
+    task.data=/files1/connie/av_hubert_lrs2_whole/433h_data \
+    task.label_dir=/files1/connie/av_hubert_lrs2_whole/433h_data \
+    task.tokenizer_bpe_model=/files1/connie/av_hubert_lrs2_whole/spm1000/spm_unigram1000.model \
+    model.w2v_path=/files1/connie/avhubert_model/large_lrs3_iter5.pt \
+    task.modalities="['audio','video']" \
+    task.pad_audio=true \
+    task.max_sample_size=80 \
+    task.stack_order_audio=4 \
+    model.dropout=0.1 \
+    model.attention_dropout=0.1 \
+    model.decoder_dropout=0.1 \
+    model.decoder_attention_dropout=0.1 \
+    model.feature_grad_mult=0.1 \
+    hydra.run.dir=/files1/connie/av_hubert_lrs2_whole/conformer/conformer_6_highlr \
+    common.user_dir=/files1/connie/av_hubert_lrs2/av_hubert/avhubert \
+    distributed_training.distributed_world_size=2 \
+    distributed_training.nprocs_per_node=2 \
+    distributed_training.distributed_init_method=tcp://localhost:10003 \
+    optimization.lr=[0.00005] \
+    optimization.update_freq=[10] \
+    optimization.max_update=200000
+
+
+
+CUDA_VISIBLE_DEVICES=0,1,2,3 fairseq-hydra-train \
+    --config-dir avhubert/conf/finetune \
+    --config-name large_lrs3_433h.yaml \
+    checkpoint.restore_file=/files1/connie/av_hubert_lrs2_whole/conformer/conformer_1_1/checkpoints/checkpoint_last.pt \
+    checkpoint.reset_optimizer=false \
+    checkpoint.reset_lr_scheduler=false \
+    checkpoint.reset_dataloader=false \
+    checkpoint.reset_meters=false \
+    task.data=/files1/connie/av_hubert_lrs2_whole/433h_data \
+    task.label_dir=/files1/connie/av_hubert_lrs2_whole/433h_data \
+    task.tokenizer_bpe_model=/files1/connie/av_hubert_lrs2_whole/spm1000/spm_unigram1000.model \
+    model.w2v_path=/files1/connie/avhubert_model/large_lrs3_iter5.pt \
+    task.modalities="['audio','video']" \
+    task.pad_audio=true \
+    task.max_sample_size=100 \
+    task.stack_order_audio=4 \
+    model.dropout=0.3 \
+    model.attention_dropout=0.1 \
+    model.decoder_dropout=0.3 \
+    model.decoder_attention_dropout=0.1 \
+    model.feature_grad_mult=0.1 \
+    hydra.run.dir=/files1/connie/av_hubert_lrs2_whole/conformer/conformer_1_2 \
+    common.user_dir=/files1/connie/av_hubert_lrs2/av_hubert/avhubert \
+    distributed_training.distributed_world_size=4 \
+    distributed_training.nprocs_per_node=4 \
+    distributed_training.distributed_init_method=tcp://localhost:10003 \
+    optimization.lr=[0.00001] \
+    optimization.update_freq=[2] \
+    optimization.max_update=200000
