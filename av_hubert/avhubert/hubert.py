@@ -20,8 +20,8 @@ from fairseq.dataclass import ChoiceEnum, FairseqDataclass
 from fairseq.models import BaseFairseqModel, register_model
 from fairseq.models.wav2vec.wav2vec2 import (
     ConvFeatureExtractionModel,
+    TransformerEncoder,
 )
-from .conformer_encoder import ConformerEncoder
 from fairseq.modules import GradMultiply, LayerNorm
 from copy import deepcopy
 
@@ -88,7 +88,6 @@ class AVHubertConfig(FairseqDataclass):
     activation_fn: ChoiceEnum(utils.get_available_activation_fns()) = field(
         default="gelu", metadata={"help": "activation function to use"}
     )
-    depthwise_conv_kernel_size: int = field(default=31, metadata={"help": "kernel size for depthwise convolution in conformer block"})
 
     # dropouts
     dropout: float = field(
@@ -320,7 +319,7 @@ class SubModel(nn.Module):
         super().__init__()
         self.resnet = resnet
         self.proj = nn.Linear(input_dim, cfg.encoder_embed_dim)
-        self.encoder = ConformerEncoder(cfg) if cfg.encoder_layers > 0 else None
+        self.encoder = TransformerEncoder(cfg) if cfg.encoder_layers > 0 else None
 
     def forward(self, x):
         if self.resnet is not None:
@@ -397,7 +396,7 @@ class AVHubertModel(BaseFairseqModel):
             torch.FloatTensor(cfg.audio_feat_dim).uniform_() if self.masking_type == 'input' else torch.FloatTensor(cfg.encoder_embed_dim).uniform_()
         )
 
-        self.encoder = ConformerEncoder(cfg) #changed
+        self.encoder = TransformerEncoder(cfg)
         self.layer_norm = LayerNorm(self.embed)
 
         self.target_glu = None

@@ -6,7 +6,7 @@
 
 import os,sys
 import logging
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Union
 
 import numpy as np
 
@@ -41,6 +41,7 @@ if DBG:
     )
     from utils import compute_mask_indices
     from decoder import TransformerDecoder
+    from conformer_encoder import ConformerEncoder
 
 else:
     from .hubert_pretraining import (
@@ -50,6 +51,7 @@ else:
     from .resnet import ResEncoder
     from .utils import compute_mask_indices
     from .decoder import TransformerDecoder
+    from .conformer_encoder import ConformerEncoder
 
 from omegaconf import II
 
@@ -314,12 +316,31 @@ class AVHubertConfig(FairseqDataclass):
     )
     no_scale_embedding: bool = field(default=True, metadata={'help': 'scale embedding'})
 
+    # Conformer/CAR specific parameters
+    car_compress_dim: int = field(
+        default=256, metadata={"help": "compression dimension for CAR module"}
+    )
+    car_kernel_sizes: str = field(
+        default="[3,5,7]",
+        metadata={"help": "kernel sizes for CAR module, e.g., [3,5,7] or \"[3,5,7]\" "}
+    )
+    car_dropout: float = field(
+        default=0.1, metadata={"help": "dropout for CAR module"}
+    )
+    max_relative_positions: int = field(
+        default=128, metadata={"help": "maximum relative positions for attention bias"}
+    )
+    gated_fusion: bool = field(
+        default=False, metadata={"help": "enable gated fusion for audio and video features when modality_fuse is concat"}
+    )
+
 class SubModel(nn.Module):
     def __init__(self, resnet=None, input_dim=None, cfg=None):
         super().__init__()
         self.resnet = resnet
         self.proj = nn.Linear(input_dim, cfg.encoder_embed_dim)
         self.encoder = TransformerEncoder(cfg) if cfg.encoder_layers > 0 else None
+        self.masking_type = cfg.masking_type
 
     def forward(self, x):
         if self.resnet is not None:
@@ -331,7 +352,7 @@ class SubModel(nn.Module):
             x = x.transpose(1, 2)
         return x
 
-@register_model("av_hubert_original", dataclass=AVHubertConfig)
+@register_model("av_hubert", dataclass=AVHubertConfig)
 class AVHubertModel(BaseFairseqModel):
     def __init__(
         self,
@@ -341,6 +362,7 @@ class AVHubertModel(BaseFairseqModel):
         **kwargs
     ) -> None:
         super().__init__()
+        print(f">>>> AVHubertModel (now ConformerCAR version) __init__ called for cfg._name: {cfg._name}! <<<<", flush=True)
         logger.info(f"HubertModel Config: {cfg}")
 
         feature_ds_rate = 1
@@ -352,9 +374,18 @@ class AVHubertModel(BaseFairseqModel):
         self.feature_extractor_video = SubModel(resnet=resnet, input_dim=resnet.backend_out, cfg=sub_cfg)
         self.modality_dropout, self.audio_dropout = cfg.modality_dropout, cfg.audio_dropout
         self.modality_fuse = cfg.modality_fuse
+        self.gated_fusion = cfg.gated_fusion
         self.encoder_embed_dim = cfg.encoder_embed_dim
         if self.modality_fuse == 'concat':
             self.embed = cfg.encoder_embed_dim * 2
+            if self.gated_fusion:
+                self.gate_v_proj = nn.Linear(cfg.encoder_embed_dim, cfg.encoder_embed_dim)
+                self.audio_proj_for_gated = nn.Linear(cfg.encoder_embed_dim, cfg.encoder_embed_dim)
+                self.video_proj_for_gated = nn.Linear(cfg.encoder_embed_dim, cfg.encoder_embed_dim)
+                for m in [self.gate_v_proj, self.audio_proj_for_gated, self.video_proj_for_gated]:
+                    nn.init.xavier_uniform_(m.weight)
+                    if m.bias is not None:
+                        nn.init.zeros_(m.bias)
         elif self.modality_fuse == 'add':
             self.embed = cfg.encoder_embed_dim
         self.post_extract_proj = (
@@ -395,8 +426,27 @@ class AVHubertModel(BaseFairseqModel):
         self.mask_emb = nn.Parameter(
             torch.FloatTensor(cfg.audio_feat_dim).uniform_() if self.masking_type == 'input' else torch.FloatTensor(cfg.encoder_embed_dim).uniform_()
         )
-
-        self.encoder = TransformerEncoder(cfg)
+        print(">>>> AVHubertModel: Initializing self.encoder with ConformerEncoder <<<<", flush=True)
+        self.encoder = ConformerEncoder(
+            embed_dim=cfg.encoder_embed_dim,
+            ffn_embed_dim=cfg.encoder_ffn_embed_dim,
+            attention_heads=cfg.encoder_attention_heads,
+            layers=cfg.encoder_layers,
+            dropout=cfg.dropout,
+            attention_dropout=cfg.attention_dropout,
+            activation_dropout=cfg.activation_dropout,
+            activation_fn=cfg.activation_fn,
+            layerdrop=cfg.encoder_layerdrop,
+            # CAR specific parameters from AVHubertConfig:
+            car_compress_dim=cfg.car_compress_dim,
+            car_kernel_sizes=cfg.car_kernel_sizes,  # This is now 'str' in your config
+            car_dropout=cfg.car_dropout,
+            # Other Conformer specific parameters (ensure these are in AVHubertConfig or have defaults in ConformerEncoder):
+            layer_norm_first=cfg.layer_norm_first,
+            max_relative_positions=cfg.max_relative_positions,
+        )
+        print(f">>>> AVHubertModel: self.encoder is now: {type(self.encoder).__name__} <<<<", flush=True)
+        
         self.layer_norm = LayerNorm(self.embed)
 
         self.target_glu = None
@@ -616,7 +666,18 @@ class AVHubertModel(BaseFairseqModel):
                 else:
                     features_video = 0 * features_video
         if self.modality_fuse == 'concat':
-            features = torch.cat([features_audio, features_video], dim=1)
+            if self.gated_fusion:
+                video_t = features_video.transpose(1, 2) # (B, T, F)
+                audio_t = features_audio.transpose(1, 2) # (B, T, F)
+                
+                gate_val = torch.sigmoid(self.gate_v_proj(video_t)) # Z = sigma(W_v v + b_v)
+                gated_audio_t = gate_val * self.audio_proj_for_gated(audio_t) # Z * (W_a a)
+                projected_video_t = self.video_proj_for_gated(video_t) # W_v' v
+                
+                fused_features_t = torch.cat([gated_audio_t, projected_video_t], dim=2) # Concat: (B, T, 2*F)
+                features = fused_features_t.transpose(1, 2) # Back to (B, 2*F, T)
+            else:
+                features = torch.cat([features_audio, features_video], dim=1)
         elif self.modality_fuse == 'add':
             features = features_audio + features_video
         if target_list is not None:
@@ -644,7 +705,7 @@ class AVHubertModel(BaseFairseqModel):
         # x: (B, T, D), float
         # padding_mask: (B, T), bool
         # mask_indices: (B, T), bool
-        x, _ = self.encoder(
+        x, layer_outputs = self.encoder(
             x,
             padding_mask=padding_mask,
             layer=None if output_layer is None else output_layer - 1
@@ -711,7 +772,18 @@ class AVHubertModel(BaseFairseqModel):
             features_audio = self.forward_features(src_audio, modality='audio') # features: [B, F, T]
 
         if self.modality_fuse == 'concat':
-            features = torch.cat([features_audio, features_video], dim=1)
+            if self.gated_fusion:
+                video_t = features_video.transpose(1, 2) # (B, T, F)
+                audio_t = features_audio.transpose(1, 2) # (B, T, F)
+                
+                gate_val = torch.sigmoid(self.gate_v_proj(video_t)) # Z = sigma(W_v v + b_v)
+                gated_audio_t = gate_val * self.audio_proj_for_gated(audio_t) # Z * (W_a a)
+                projected_video_t = self.video_proj_for_gated(video_t) # W_v' v
+                
+                fused_features_t = torch.cat([gated_audio_t, projected_video_t], dim=2) # Concat: (B, T, 2*F)
+                features = fused_features_t.transpose(1, 2) # Back to (B, 2*F, T)
+            else:
+                features = torch.cat([features_audio, features_video], dim=1)
         elif self.modality_fuse == 'add':
             features = features_audio + features_video
         features_pen = features.float().pow(2).mean()
@@ -736,14 +808,21 @@ class AVHubertModel(BaseFairseqModel):
         # x: (B, T, D), float
         # padding_mask: (B, T), bool
         # mask_indices: (B, T), bool
-        x, _ = self.encoder(
-            x,
-            padding_mask=padding_mask,
-            layer=None if output_layer is None else output_layer - 1
-        )
+        # For AVHubertModel (TransformerEncoder)
+        if isinstance(self.encoder, TransformerEncoder):
+            encoder_output = self.encoder(x, padding_mask=padding_mask, layer=output_layer - 1 if output_layer is not None else None)
+            if isinstance(encoder_output, tuple):
+                x = encoder_output[0]
+            else:
+                x = encoder_output
+        else: # For ConformerEncoder or other types that return (x, layer_outputs)
+            x, _ = self.encoder(
+                x,
+                padding_mask=padding_mask,
+                layer=output_layer # ConformerEncoder expects 1-based
+            )
 
         return x, padding_mask
-
 
     def get_extra_losses(self, net_output):
         extra_losses = []
@@ -777,3 +856,4 @@ class AVHubertModel(BaseFairseqModel):
             logits[1:][neg_is_pos] = float("-inf")
         logits = logits.transpose(0, 1)  # (num_x, num_cls+1)
         return logits
+

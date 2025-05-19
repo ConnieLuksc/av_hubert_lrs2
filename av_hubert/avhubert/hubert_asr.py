@@ -192,9 +192,6 @@ class AVHubertCtc(BaseFairseqModel):
 
 @dataclass
 class AVHubertSeq2SeqConfig(AVHubertAsrConfig):
-    encoder_layers: Optional[int] = field(
-        default=None, metadata={"help": "Number of encoder layers (overrides checkpoint value if set)"}
-    )
     decoder_embed_dim: int = field(
         default=768, metadata={"help": "decoder embedding dimension"}
     )
@@ -272,7 +269,6 @@ class HubertEncoder(FairseqEncoder):
             "no_mask_channel_overlap": cfg.no_mask_channel_overlap,
             "encoder_layerdrop": cfg.layerdrop,
             "feature_grad_mult": cfg.feature_grad_mult,
-            "encoder_layers": cfg.encoder_layers,
         }
 
         if cfg.w2v_args is None:

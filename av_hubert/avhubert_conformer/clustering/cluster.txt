@@ -1,0 +1,16 @@
+Step 1: MFCC Feature Extraction
+python dump_mfcc_feature.py "/files1/connie/av_hubert_lrs2_whole/433h_data" train 1 0 "/files1/connie/av_hubert_lrs2_whole/mfcc_features_output"
+python dump_mfcc_feature.py "/files1/connie/av_hubert_lrs2_whole/433h_data" valid 1 0 "/files1/connie/av_hubert_lrs2_whole/mfcc_features_output"
+python dump_mfcc_feature.py "/files1/connie/av_hubert_lrs2_whole/433h_data" test 1 0 "/files1/connie/av_hubert_lrs2_whole/mfcc_features_output"
+Step 2: K-means Model Training
+python learn_kmeans.py "/files1/connie/av_hubert_lrs2_whole/mfcc_features_output" train 1 "/files1/connie/av_hubert_lrs2_whole/kmeans_models_output/mfcc_kmeans_100.km" 100 --percent 0.1
+Step 3: K-means Label Generation (Applying K-means model)
+python dump_km_label.py "/files1/connie/av_hubert_lrs2_whole/mfcc_features_output" train "/files1/connie/av_hubert_lrs2_whole/kmeans_models_output/mfcc_kmeans_100.km" 1 0 "/files1/connie/av_hubert_lrs2_whole/labels_output/mfcc_km_100"
+python dump_km_label.py "/files1/connie/av_hubert_lrs2_whole/mfcc_features_output" valid "/files1/connie/av_hubert_lrs2_whole/kmeans_models_output/mfcc_kmeans_100.km" 1 0 "/files1/connie/av_hubert_lrs2_whole/labels_output/mfcc_km_100"
+python dump_km_label.py "/files1/connie/av_hubert_lrs2_whole/mfcc_features_output" test "/files1/connie/av_hubert_lrs2_whole/kmeans_models_output/mfcc_kmeans_100.km" 1 0 "/files1/connie/av_hubert_lrs2_whole/labels_output/mfcc_km_100"
+Step 4: Merge Shard Labels
+cp "/files1/connie/av_hubert_lrs2_whole/labels_output/mfcc_km_100/train_0_1.km" "/files1/connie/av_hubert_lrs2_whole/labels_output/mfcc_km_100/train.km"
+cp "/files1/connie/av_hubert_lrs2_whole/labels_output/mfcc_km_100/valid_0_1.km" "/files1/connie/av_hubert_lrs2_whole/labels_output/mfcc_km_100/valid.km"
+cp "/files1/connie/av_hubert_lrs2_whole/labels_output/mfcc_km_100/test_0_1.km" "/files1/connie/av_hubert_lrs2_whole/labels_output/mfcc_km_100/test.km"
+Step 5: Create Label Dictionary
+for i in $(seq 0 99); do echo "$i 1"; done > "/files1/connie/av_hubert_lrs2_whole/labels_output/mfcc_km_100/dict.km.txt"

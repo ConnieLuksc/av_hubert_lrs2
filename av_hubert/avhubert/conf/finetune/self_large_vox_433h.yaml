@@ -72,7 +72,10 @@ lr_scheduler:
   final_lr_scale: 0.05
 
 model:
-  _name: av_hubert_seq2seq
+  _name: av_hubert_conformer_car
+  car_compress_dim: 256
+  car_kernel_sizes: [3, 5, 7]
+  max_relative_positions: 128
   w2v_path: ???
   apply_mask: false
   mask_selection: static
