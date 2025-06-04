@@ -7,10 +7,25 @@ CUDA_VISIBLE_DEVICES=0,1,2,3 fairseq-hydra-train \
   --config-dir avhubert_new/conf/pretrain \
   --config-name conformer \
   task.data=/files1/connie/av_hubert_lrs2_whole/433h_data \
-  task.label_dir=/files1/connie/av_hubert_lrs2_whole/labels_output/mfcc_km_100 \
+  task.label_dir=/files1/connie/av_hubert_lrs2_whole/labels_output/mfcc_km_500 \
   common.user_dir=/files1/connie/av_hubert_lrs2/av_hubert/avhubert_new \
-  hydra.run.dir=/files1/connie/av_hubert_train/pretrain/conformer1 \
+  hydra.run.dir=/files1/connie/av_hubert_train/pretrain/conformer_iter1_500 \
   distributed_training.distributed_world_size=4 \
   distributed_training.nprocs_per_node=4 \
   distributed_training.distributed_init_method=tcp://localhost:10003
 
+Iteration 2:
+CUDA_VISIBLE_DEVICES=0,1,2,3 fairseq-hydra-train \
+  --config-dir avhubert_new/conf/pretrain \
+  --config-name conformer_iter2 \
+  checkpoint.reset_optimizer=true \
+  checkpoint.reset_dataloader=true \
+  checkpoint.reset_meters=true \
+  task.data=/files1/connie/av_hubert_lrs2_whole/433h_data \
+  task.label_dir=/files1/connie/av_hubert_lrs2_whole/labels_iter2_100 \
+  common.user_dir=/files1/connie/av_hubert_lrs2/av_hubert/avhubert_new \
+  hydra.run.dir=/files1/connie/av_hubert_train/pretrain/conformer_iter2_100 \
+  distributed_training.distributed_world_size=4 \
+  distributed_training.nprocs_per_node=4 \
+  distributed_training.distributed_init_method=tcp://localhost:10003
+  --ddp-backend=legacy_ddp

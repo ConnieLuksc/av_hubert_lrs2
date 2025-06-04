@@ -320,9 +320,9 @@ class AVHubertConfig(FairseqDataclass):
     car_compress_dim: int = field(
         default=256, metadata={"help": "compression dimension for CAR module"}
     )
-    car_kernel_sizes: str = field(
-        default="[3,5,7]",
-        metadata={"help": "kernel sizes for CAR module, e.g., [3,5,7] or \"[3,5,7]\" "}
+    car_kernel_sizes: List[int] = field(
+        default_factory=lambda: [3, 5, 7],
+        metadata={"help": "kernel sizes for CAR module, e.g., [3,5,7]"}
     )
     car_dropout: float = field(
         default=0.1, metadata={"help": "dropout for CAR module"}
@@ -446,15 +446,19 @@ class AVHubertModel(BaseFairseqModel):
             max_relative_positions=cfg.max_relative_positions,
         )
         print(f">>>> AVHubertModel: self.encoder is now: {type(self.encoder).__name__} <<<<", flush=True)
-        
+        print(f"✅ About to init LayerNorm with dim = {self.embed}", flush=True)
+        assert self.embed > 0, f"❌ Invalid embed dim: {self.embed}"  # 🧨 This is the assertion
         self.layer_norm = LayerNorm(self.embed)
+        print("✅ LayerNorm created successfully", flush=True)
 
+        print("✅ Before self.target_glu", flush=True)
         self.target_glu = None
         if cfg.target_glu:
+            print("✅ Initializing target_glu", flush=True)
             self.target_glu = nn.Sequential(
                 nn.Linear(final_dim, final_dim * 2), nn.GLU()
             )
-
+        print("✅ Before self.final_proj", flush=True)
         self.untie_final_proj = cfg.untie_final_proj
         if self.untie_final_proj:
             self.final_proj = nn.Linear(
@@ -462,18 +466,19 @@ class AVHubertModel(BaseFairseqModel):
             )
         else:
             self.final_proj = nn.Linear(cfg.encoder_embed_dim, final_dim)
-
+        print("✅ Before label_embs_concat block", flush=True)
         # modules below are not needed during fine-tuning
-        if any([d is None for d in dictionaries]):
-            logger.info(
-                "cannot find dictionary. assume will be used for fine-tuning"
-            )
+        if isinstance(dictionaries, list):
+            dict_list = dictionaries
         else:
-            self.num_classes = [len(d) for d in dictionaries]
-            self.label_embs_concat = nn.Parameter(
-                torch.FloatTensor(sum(self.num_classes), final_dim)
-            )
-            nn.init.uniform_(self.label_embs_concat)
+            dict_list = [dictionaries]
+
+        self.num_classes = [len(item) for item in dict_list]
+        total_classes = sum(self.num_classes)
+        print(f"✅ Using total_classes = {total_classes}, final_dim = {final_dim}", flush=True)
+        self.label_embs_concat = nn.Parameter(
+            torch.empty(total_classes, final_dim, device="cpu").uniform_()
+        )
 
     def upgrade_state_dict_named(self, state_dict, name):
         """Upgrade a (possibly old) state dict for new versions of fairseq."""
@@ -645,7 +650,8 @@ class AVHubertModel(BaseFairseqModel):
         padding_mask: Optional[torch.Tensor] = None,
         mask: bool = True,
         features_only: bool = False,
-        output_layer: Optional[int] = None
+        output_layer: Optional[int] = None,
+        prev_output_tokens: Optional[torch.Tensor] = None,
     ) -> Dict[str, torch.Tensor]:
         """output layer is 1-based"""
         src_audio, src_video = source['audio'], source['video']
@@ -857,3 +863,14 @@ class AVHubertModel(BaseFairseqModel):
         logits = logits.transpose(0, 1)  # (num_x, num_cls+1)
         return logits
 
+    def load_state_dict(self, state_dict, strict=True, **kwargs):
+        print("🔍 Custom AVHubertModel.load_state_dict called", flush=True)
+        if "label_embs_concat" in state_dict:
+            ckpt_shape = state_dict["label_embs_concat"].shape
+            model_shape = self.label_embs_concat.shape
+            if ckpt_shape != model_shape:
+                print(f"⚠️ Skipping label_embs_concat: ckpt shape {ckpt_shape} vs model shape {model_shape}",flush=True)
+                del state_dict["label_embs_concat"]
+            else:
+                print(f"✅ Loaded label_embs_concat: {ckpt_shape}",flush=True)
+        return super().load_state_dict(state_dict, strict=strict, **kwargs)

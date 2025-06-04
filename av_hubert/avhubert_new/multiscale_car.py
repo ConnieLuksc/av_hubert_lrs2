@@ -14,7 +14,7 @@ class MultiScaleCAR(nn.Module):
             self.conv_branches.append(
                 nn.Sequential(
                     nn.Conv1d(embed_dim, compress_dim, kernel_size=k, padding=k // 2),
-                    nn.BatchNorm1d(compress_dim),
+                    nn.GroupNorm(num_groups=4, num_channels=compress_dim), 
                     nn.ReLU(),
                 )
             )

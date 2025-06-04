@@ -174,6 +174,7 @@ class AVHubertPretrainingTask(FairseqTask):
         self.fine_tuning = cfg.fine_tuning
         if cfg.fine_tuning:
             self.state.add_factory("target_dictionary", self.load_dictionaries)
+            self.state.add_factory("dictionaries", self.load_dictionaries)
             if cfg.is_s2s:
                 self.state.add_factory("s2s_tokenizer", self.load_tokenizer)
         else:

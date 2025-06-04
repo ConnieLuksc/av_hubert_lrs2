@@ -12,6 +12,10 @@ checkpoint:
   save_interval_updates: 25000
   keep_interval_updates: 1
   no_epoch_checkpoints: true
+  keep_best_checkpoints: 1
+  best_checkpoint_metric: loss
+  maximize_best_checkpoint_metric: false
+  patience: 10
 
 distributed_training:
   ddp_backend: no_c10d
@@ -27,7 +31,7 @@ task:
   labels: ["km"]
   label_rate: ${model.label_rate}
   sample_rate: 25
-  max_sample_size: 500
+  max_sample_size: 1000
   min_sample_size: 5
   pad_audio: true
   random_crop: false
@@ -61,11 +65,9 @@ optimizer:
   weight_decay: 0.01
 
 lr_scheduler:
-  _name: tri_stage
-  warmup_steps: 10000
-  hold_steps: 50000
-  decay_steps: 60000
-  final_lr_scale: 0.05
+  _name: polynomial_decay
+  warmup_updates: 8000
+  total_num_update: 150000
 
 model:
   _name: av_hubert
@@ -84,9 +86,9 @@ model:
   extractor_mode: default
   final_dim: 256
   encoder_layerdrop: 0.05
-  dropout_input: 0.1
-  dropout_features: 0.1
-  dropout: 0.1
+  dropout_input: 0.15
+  dropout_features: 0.15
+  dropout: 0.15
   attention_dropout: 0.1
   feature_grad_mult: 0.1
   untie_final_proj: true

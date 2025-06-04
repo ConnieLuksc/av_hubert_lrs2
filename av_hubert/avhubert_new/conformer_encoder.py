@@ -11,6 +11,8 @@ from fairseq.modules import (
     LayerNorm,
     MultiheadAttention,
 )
+from dataclasses import dataclass, field
+from typing import List
 # For quantization noise, if needed later
 # from fairseq.modules import quant_noise as apply_quant_noise_
 
@@ -52,7 +54,7 @@ class ConformerEncoderLayer(nn.Module):
         activation_fn: str = "relu",
         # CAR module params
         car_compress_dim: int = 256,
-        car_kernel_sizes: str = "[3, 5, 7]",
+        car_kernel_sizes: List[int] = field(default_factory=lambda: [3, 5, 7]),
         car_dropout: float = 0.1,
         max_relative_positions: int = 128, # New parameter
         # LayerNorm options
@@ -180,7 +182,7 @@ class ConformerEncoder(nn.Module):
         layerdrop: float = 0.0,
         # CAR module params to pass to layers
         car_compress_dim: int = 256,
-        car_kernel_sizes: str = "[3, 5, 7]",
+        car_kernel_sizes: List[int] = field(default_factory=lambda: [3, 5, 7]),
         car_dropout: float = 0.1,
         max_relative_positions: int = 128, # New parameter
         # LayerNorm options

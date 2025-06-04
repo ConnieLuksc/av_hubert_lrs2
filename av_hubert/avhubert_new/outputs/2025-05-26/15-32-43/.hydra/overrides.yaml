@@ -1,0 +1,5 @@
+- dataset.gen_subset=valid
+- generation.beam=20
+- common_eval.path=/files1/connie/av_hubert_train/pretrain/conformer_iter1_500/checkpoints/checkpoint_best.pt
+- common_eval.results_path=/files1/connie/av_hubert_train/pretrain/conformer_iter1_500/decode_s2s/valid
+- common.user_dir=/files1/connie/av_hubert_lrs2/av_hubert/avhubert_new
